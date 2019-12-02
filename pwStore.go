@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"path/filepath"
 	"io"
-	"secret"
+	"./secret"
 	"bytes"
 	"io/ioutil"
 	"crypto/md5"
