@@ -1,19 +1,20 @@
-package  main
+package main
+
 import (
-	"fmt"
-	"strings"
 	"bufio"
-	"os"
-	"strconv"
-	"path/filepath"
-	"io"
-	"./secret"
 	"bytes"
-	"io/ioutil"
 	"crypto/md5"
-	"os/signal"
-	"syscall"
+	"fmt"
 	"golang.org/x/crypto/ssh/terminal"
+	"io"
+	"io/ioutil"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"pwstore/secret"
+	"strconv"
+	"strings"
+	"syscall"
 )
 
 type Item struct {
@@ -24,25 +25,24 @@ func (item *Item) Set(str string) {
 	item.content = str
 }
 
-func (item Item) Get() string{
+func (item Item) Get() string {
 	return item.content
 }
 
-type cryptFile struct{
+type cryptFile struct {
 	filePath string
-	file *os.File
+	file     *os.File
 }
 
-type pwStore struct{
-	pwMd5 string
+type pwStore struct {
+	pwMd5     string
 	pwMd5File *os.File
-	pw string
-	list []Item
+	pw        string
+	list      []Item
 	cryptfile cryptFile
 }
 
-
-func (this *pwStore) Setpw(pw string){
+func (this *pwStore) Setpw(pw string) {
 	this.pw = pw
 }
 
@@ -52,8 +52,8 @@ func (this *pwStore) Append(item Item) bool {
 }
 
 func (this pwStore) ShowList() {
-//	fmt.Printf("len %d\n", len(this.list))
-	for i:=0; i < len(this.list); i++{
+	//	fmt.Printf("len %d\n", len(this.list))
+	for i := 0; i < len(this.list); i++ {
 		fmt.Printf("%d.%s\n", i+1, this.list[i].Get())
 	}
 }
@@ -70,90 +70,89 @@ func (this pwStore) ShowItem(id int) {
 	fmt.Printf("%s\n", this.list[id].Get())
 }
 
-func (this *pwStore)DelItem(id int){
+func (this *pwStore) DelItem(id int) {
 	this.list = append(this.list[:id], this.list[id+1:]...)
 }
 
-func (this *pwStore) InitPwMd5(){
+func (this *pwStore) InitPwMd5() {
 	allData, err := ioutil.ReadAll(this.pwMd5File)
 	if err != nil {
 		fmt.Printf("read all error: %s\n", err)
 		os.Exit(1)
 	}
-	
+
 	this.pwMd5 = strings.Trim(string(allData), "\n")
 }
 
-func (this *pwStore) InitList(){
+func (this *pwStore) InitList() {
 	var err error
 	var bt []byte
 	var off int
 	str := ""
 	bt = make([]byte, 1024)
-	for{
-//		fmt.Println(off)
+	for {
+		//		fmt.Println(off)
 		offt := int64(off)
-//		fmt.Println("vvvvvvvvv")
-//		fmt.Println(offt)
+		//		fmt.Println("vvvvvvvvv")
+		//		fmt.Println(offt)
 
 		if off, err = this.cryptfile.file.ReadAt(bt, offt); err == nil {
-//			fmt.Println("33333333333")
+			//			fmt.Println("33333333333")
 			str += string(bt)
-		}else if(err == io.EOF){
-//			fmt.Println("444444444444444")
-//			fmt.Printf("len %d\n", len(bt))
+		} else if err == io.EOF {
+			//			fmt.Println("444444444444444")
+			//			fmt.Printf("len %d\n", len(bt))
 			str += string(bt[:off])
 			break
-		}else{
+		} else {
 			fmt.Printf("init list, read at error:%s", err)
 			os.Exit(1)
 		}
 	}
 
 	encrptedStr := str
-	if strings.TrimSpace(encrptedStr) == ""{
+	if strings.TrimSpace(encrptedStr) == "" {
 		return
 	}
 
-//	fmt.Printf("#%s#\n", encrptedStr)
+	//	fmt.Printf("#%s#\n", encrptedStr)
 
-	repeat := 16 - len(this.pw) % 16;
-//	fmt.Println(repeat)
-//	os.Exit(0)
+	repeat := 16 - len(this.pw)%16
+	//	fmt.Println(repeat)
+	//	os.Exit(0)
 	pad := bytes.Repeat([]byte{byte(repeat)}, repeat)
-	
+
 	key := append([]byte(this.pw), pad...)
-//	fmt.Printf("key -------> %s\n", string(key))
-//	os.Exit(0)
+	//	fmt.Printf("key -------> %s\n", string(key))
+	//	os.Exit(0)
 
-
-//	fmt.Printf("----encrptedStr--------%s###\n", encrptedStr)
+	//	fmt.Printf("----encrptedStr--------%s###\n", encrptedStr)
 
 	decrptedStr, err := secret.Dncrypt(encrptedStr, key)
 	if err != nil {
 		fmt.Printf("Dncrypt err: %s\n", err)
 		os.Exit(1)
 	}
-	
-//	fmt.Printf("%s----decrptedStr---------\n", decrptedStr)
-	
+
+	//	fmt.Printf("%s----decrptedStr---------\n", decrptedStr)
+
 	lines := strings.Split(decrptedStr, "\n")
 
-//	fmt.Printf("%v-------------\n", lines)
-//	fmt.Printf("%d-----+++++--------\n", len(lines))
+	//	fmt.Printf("%v-------------\n", lines)
+	//	fmt.Printf("%d-----+++++--------\n", len(lines))
 
 	for i := 0; i < len(lines)-1; i++ {
 		item := Item{lines[i]}
-//		item.Set(lines[i])
+		//		item.Set(lines[i])
 		this.list = append(this.list, item)
-//		this.list[i].Set(lines[i])
-//		fmt.Println(lines[i])
+		//		this.list[i].Set(lines[i])
+		//		fmt.Println(lines[i])
 	}
-//	fmt.Printf("%v +++++++++\n", this.list)
+	//	fmt.Printf("%v +++++++++\n", this.list)
 	fmt.Println("init list success!")
 }
 
-func (this pwStore) SaveFile(){
+func (this pwStore) SaveFile() {
 	allContents := ""
 	for i := 0; i < len(this.list); i++ {
 		str := this.list[i].Get() + "\n"
@@ -161,7 +160,7 @@ func (this pwStore) SaveFile(){
 	}
 	var n int64
 	var err error
-	repeat := 16 - len(this.pw) % 16;
+	repeat := 16 - len(this.pw)%16
 	pad := bytes.Repeat([]byte{byte(repeat)}, repeat)
 	key := append([]byte(this.pw), pad...)
 	encrptedStr, err := secret.Encrypt([]byte(allContents), key)
@@ -170,7 +169,7 @@ func (this pwStore) SaveFile(){
 		os.Exit(1)
 	}
 
-	if err = this.cryptfile.file.Truncate(0); err != nil{
+	if err = this.cryptfile.file.Truncate(0); err != nil {
 		fmt.Printf("truncate error: %s", err)
 		os.Exit(1)
 	}
@@ -194,7 +193,7 @@ func fileExist(path string) bool {
 	}
 	if fileInfo.IsDir() {
 		return false
-	}else{
+	} else {
 		return true
 	}
 }
@@ -206,23 +205,22 @@ func dirExist(path string) bool {
 		return false
 	}
 	if fileInfo.IsDir() {
-		return true 
-	}else{
-		return false 
+		return true
+	} else {
+		return false
 	}
 }
 
-func gentleExit(){
+func gentleExit() {
 	fmt.Println("clear resource, gentle exit")
 	os.Exit(0)
 }
 
-
 func main() {
 	ch := make(chan os.Signal)
 	signal.Notify(ch, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGUSR1, syscall.SIGUSR2)
-	go func(){
-		for s := range(ch) {
+	go func() {
+		for s := range ch {
 			switch s {
 			case syscall.SIGHUP, syscall.SIGTERM, syscall.SIGQUIT:
 				fmt.Println("gentle exit")
@@ -244,12 +242,12 @@ func main() {
 
 	var fd, md5fd *os.File
 	var err error
-	defer func(){ 
+	defer func() {
 		fd.Close()
 		fmt.Println("fd close")
 	}()
-	defer func(){ 
-		md5fd.Close();
+	defer func() {
+		md5fd.Close()
 		fmt.Println("md5fd close")
 	}()
 
@@ -258,7 +256,7 @@ func main() {
 			fmt.Printf("open file %s error: %s\n", fileName, err)
 			os.Exit(1)
 		}
-	}else{
+	} else {
 		dir := filepath.Dir(fileName)
 		if !dirExist(dir) {
 			if err = os.MkdirAll(dir, os.ModePerm); err != nil {
@@ -279,7 +277,7 @@ func main() {
 			fmt.Printf("open file %s error: %s\n", pwMd5Name, err)
 			os.Exit(1)
 		}
-	}else{
+	} else {
 		fmt.Printf("%s not exist\n", pwMd5Name)
 		os.Exit(1)
 	}
@@ -301,7 +299,7 @@ func main() {
 		inputMd5Str := fmt.Sprintf("%X", inputMd5)
 
 		if inputMd5Str != pwst.pwMd5 {
-			if(i >= 3){
+			if i >= 3 {
 				fmt.Printf("\nerror password beyond three times\n\n")
 				os.Exit(0)
 			}
@@ -311,7 +309,7 @@ func main() {
 		pwst.Setpw(pw)
 		pwst.InitList()
 
-		for{
+		for {
 			tips := `
 			####################### menu ##########################
 			a. append new item
@@ -326,7 +324,7 @@ func main() {
 			input, _ = reader.ReadString('\n')
 			input = strings.Trim(input, "\n")
 
-			switch input{
+			switch input {
 			case "a":
 				input, _ = reader.ReadString('\n')
 				input = strings.Trim(input, "\n")
@@ -345,7 +343,7 @@ func main() {
 				input = strings.Trim(input, "\n")
 				var itemNo int
 				var err error
-				if itemNo, err = strconv.Atoi(input); err != nil || itemNo <= 0{
+				if itemNo, err = strconv.Atoi(input); err != nil || itemNo <= 0 {
 					fmt.Printf("%s\n", "please input integer!")
 					fmt.Printf("which item do you want to modify? enter item no :")
 					input, _ = reader.ReadString('\n')
@@ -356,11 +354,11 @@ func main() {
 						continue
 					}
 				}
-//				fmt.Printf("itemNo %d", itemNo)
+				//				fmt.Printf("itemNo %d", itemNo)
 
 				pwstLen := pwst.Len()
-//				fmt.Printf("pwstLen %d", pwstLen)
-				if(itemNo > pwstLen){
+				//				fmt.Printf("pwstLen %d", pwstLen)
+				if itemNo > pwstLen {
 					fmt.Printf("%s\n", "error, input beyond max item no!")
 					continue
 				}
@@ -377,7 +375,7 @@ func main() {
 				input = strings.Trim(input, "\n")
 				var itemNo int
 				var err error
-				if itemNo, err = strconv.Atoi(input); err != nil || itemNo <= 0{
+				if itemNo, err = strconv.Atoi(input); err != nil || itemNo <= 0 {
 					fmt.Printf("%s\n", "please input integer!")
 					fmt.Printf("which item do you want to query? enter item no :")
 					input, _ = reader.ReadString('\n')
@@ -389,11 +387,11 @@ func main() {
 				}
 
 				pwstLen := pwst.Len()
-				if(itemNo > pwstLen){
+				if itemNo > pwstLen {
 					fmt.Printf("%s\n", "error, input beyond max item no!")
 					continue
 				}
-				pwst.ShowItem(itemNo-1)
+				pwst.ShowItem(itemNo - 1)
 				continue
 
 			case "d":
@@ -402,7 +400,7 @@ func main() {
 				input = strings.Trim(input, "\n")
 				var itemNo int
 				var err error
-				if itemNo, err = strconv.Atoi(input); err != nil || itemNo <= 0{
+				if itemNo, err = strconv.Atoi(input); err != nil || itemNo <= 0 {
 					fmt.Printf("%s\n", "please input integer!")
 					fmt.Printf("which item do you want to delete? enter item no :")
 					input, _ = reader.ReadString('\n')
@@ -413,7 +411,7 @@ func main() {
 					}
 				}
 				pwstLen := pwst.Len()
-				if(itemNo > pwstLen){
+				if itemNo > pwstLen {
 					fmt.Printf("%s\n", "error, input beyond max item no!")
 					continue
 				}
@@ -426,11 +424,11 @@ func main() {
 				}
 				upper := bytes.ToUpper([]byte{bt})
 				if bytes.Equal(upper, []byte{'Y'}) {
-					pwst.DelItem(itemNo-1)
+					pwst.DelItem(itemNo - 1)
 					fmt.Printf("delete success!\n")
-				}else if bytes.Equal(upper, []byte{'N'}) {
+				} else if bytes.Equal(upper, []byte{'N'}) {
 					fmt.Printf("delete abort!\n")
-				}else{
+				} else {
 					fmt.Printf("input not Y/N, delete abort!\n")
 				}
 				continue
